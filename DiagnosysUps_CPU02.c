@@ -459,13 +459,13 @@ int Cmd_fft(int argc, char *argv[])
     uint16_t len;
     memset(buffer,0x00,sizeof(buffer));
     int i=0;
-    //while(request_fft != 0);
+    while(request_fft != 0)DEVICE_DELAY_US(1);
+
     for(i=0;i<21;i++)
     {
        sprintf((char *)&buffer,"Now fft_routine is %d",request_fft);
-       len =strlen((char *)buffer);
-       SCIwrite((char *)buffer,len);
-       SCIprintf("\r\n");
+       len =strlen((char *)buffer); SCIwrite((char *)buffer,len); SCIprintf("\r\n");
+       while(request_fft == i )DEVICE_DELAY_US(1);
     }
    return 0;
 }
