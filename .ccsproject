@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<?ccsproject version="1.0"?>
+<projectOptions>
+	<ccsVersion value="10.2.0"/>
+	<deviceVariant value="TMS320C28XX.TMS320F28377D"/>
+	<deviceFamily value="C2000"/>
+	<deviceEndianness value="little"/>
+	<codegenToolVersion value="20.2.2.LTS"/>
+	<isElfFormat value="true"/>
+	<connection value="common/targetdb/connections/TIXDS2XXUSB_Connection.xml"/>
+	<rts value="libc.a"/>
+	<createSlaveProjects value=""/>
+	<templateProperties value="id=ipc_ex1_gpio_toggle.projectspec.ipc_ex1_gpio_toggle_cpu2"/>
+	<origin value="C:\ti\C2000Ware_3_04_00_00_Software\driverlib\f2837xd\examples\dual\ipc\CCS\ipc_ex1_gpio_toggle.projectspec"/>
+	<filesToOpen value=""/>
+	<isTargetManual value="false"/>
+</projectOptions>
