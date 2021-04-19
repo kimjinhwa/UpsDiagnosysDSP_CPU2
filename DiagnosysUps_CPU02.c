@@ -9,14 +9,80 @@
 #include "stdio.h"
 #include "string.h"
 #include "SerialCommandUI.h"
+#include "math.h"
 
 #include "fatfs/src/ff.h"
 #include "cmdline.h"
 #include "ds1338z_Rtc.h"
 // For Serial Command Line
 
+#define RESULTS_BUFFER_SIZE     1024
+#define RFFT_STAGES     9
+#define RFFT_SIZE       (1 << RFFT_STAGES)
+
 #pragma DATA_SECTION(RFFTin1Buff_test,"RFFTdata1_test")
 uint16_t RFFTin1Buff_test[4096];
+#pragma DATA_SECTION(RFFTmagBuff,"RFFTdata2")
+float RFFTmagBuff[RFFT_SIZE/2+1];
+#pragma DATA_SECTION(RFFToutBuff,"RFFTdata3")
+float RFFToutBuff[RFFT_SIZE];
+
+#pragma DATA_SECTION(RFFTF32Coef,"RFFTdata4")
+
+float RFFTF32Coef[RFFT_SIZE];
+#pragma DATA_SECTION(adcAResults_1,"ADCBUFFER1")
+#pragma DATA_SECTION(adcAResults_2,"ADCBUFFER1")
+#pragma DATA_SECTION(adcAResults_3,"ADCBUFFER1")
+#pragma DATA_SECTION(adcAResults_4,"ADCBUFFER1")
+
+#pragma DATA_SECTION(adcAResults_5,"ADCBUFFER2")
+#pragma DATA_SECTION(adcAResults_6,"ADCBUFFER2")
+#pragma DATA_SECTION(adcAResults_7,"ADCBUFFER2")
+#pragma DATA_SECTION(adcAResults_8,"ADCBUFFER2")
+
+#pragma DATA_SECTION(adcAResults_9,"ADCBUFFER3")
+#pragma DATA_SECTION(adcAResults_10,"ADCBUFFER3")
+#pragma DATA_SECTION(adcAResults_11,"ADCBUFFER3")
+#pragma DATA_SECTION(adcAResults_12,"ADCBUFFER3")
+
+#pragma DATA_SECTION(adcAResults_13,"ADCBUFFER4")
+#pragma DATA_SECTION(adcAResults_14,"ADCBUFFER4")
+#pragma DATA_SECTION(adcAResults_15,"ADCBUFFER4")
+#pragma DATA_SECTION(adcAResults_16,"ADCBUFFER4")
+
+#pragma DATA_SECTION(adcAResults_17,"ADCBUFFER5")
+#pragma DATA_SECTION(adcAResults_18,"ADCBUFFER5")
+#pragma DATA_SECTION(adcAResults_19,"ADCBUFFER5")
+#pragma DATA_SECTION(adcAResults_20,"ADCBUFFER5")
+uint16_t adcAResults_1[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_2[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_3[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_4[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_5[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_6[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_7[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_8[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_9[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_10[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_11[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_12[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_13[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_14[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_15[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_16[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_17[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_18[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_19[RESULTS_BUFFER_SIZE];   // Buffer for results
+uint16_t adcAResults_20[RESULTS_BUFFER_SIZE];   // Buffer for results
+
+
+
+
+
+
+
+
+
 
 #pragma DATA_SECTION(time,"GETBUFFER")
 struct rtctime_t time;
@@ -58,7 +124,8 @@ int Cmd_cls(int argc, char *argv[]);
 int Cmd_dump(int argc, char *argv[]);
 int Cmd_fft(int argc, char *argv[]);
 int Cmd_time(int argc, char *argv[]);
-
+int memory_dump(unsigned long   startAddress,uint16_t mode);
+void get_time();
 
 volatile tState g_eState;
 volatile tState g_eUIState;
@@ -441,10 +508,18 @@ int Cmd_cls(int argc, char *argv[])
      SCIprintf("[H");
      return 0;
 }
+void get_time()
+{
+    HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC21;
+    while((HWREG(IPC_BASE + IPC_O_FLG) & IPC_STS_IPC21) == IPC_SET_IPC21) { };
+}
 int Cmd_time(int argc, char *argv[])
 {
     BYTE buffer[30];
     uint16_t len;
+
+
+    get_time();
     memset(buffer,0x00,sizeof(buffer));
    sprintf((char *)&buffer,"%d-%d-%d %d:%d:%d",2000+time.year,time.month,time.day,
            time.hour,time.minute,time.second);
@@ -459,20 +534,135 @@ int Cmd_fft(int argc, char *argv[])
     uint16_t len;
     memset(buffer,0x00,sizeof(buffer));
     int i=0;
-    while(request_fft != 0)DEVICE_DELAY_US(1);
 
+    //while((HWREG(IPC_BASE + IPC_O_STS) & IPC_STS_IPC1) == 0U) { }
+    //HWREG(IPC_BASE + IPC_O_ACK) = IPC_ACK_IPC0;
+    //while(request_fft != 0)DEVICE_DELAY_US(1);   //
+
+    //while((HWREG(IPC_BASE + IPC_O_STS) & IPC_STS_IPC0) != 0U){}; //사용하려는   데이타가 사용중이라면 기다린다.
+    while((HWREG(IPC_BASE + IPC_O_STS) & IPC_STS_IPC1) != IPC_STS_IPC1){
+       //DEVICE_DELAY_US(1);
+        //SCIprintf("Reached\r\n");
+    }; // 0번데이타가 사용되면 1번 데이타가 쓰기 금지로 들어간다.
+                                                                 // 따라서 1번데이타가 사용중이라고 설정되면 0번 데이타는 안전하게 사옹할 있다.
     for(i=0;i<21;i++)
     {
-       sprintf((char *)&buffer,"Now fft_routine is %d",request_fft);
+       int nowPos=request_fft;
+       sprintf((char *)&buffer,"Now fft_routine is %d",request_fft  );
        len =strlen((char *)buffer); SCIwrite((char *)buffer,len); SCIprintf("\r\n");
-       while(request_fft == i )DEVICE_DELAY_US(1);
+       while(request_fft == nowPos )DEVICE_DELAY_US(1);
     }
+    memory_dump((unsigned long)&RFFTin1Buff_test,1);
+    HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC0; // 데이타를 작업하겠다고 CPU1 알려 준다.
+    HWREG(IPC_BASE + IPC_O_CLR) = IPC_SET_IPC0; //클리어 시켜준다.
    return 0;
 }
 
+int memory_dump(unsigned long   startAddress,uint16_t mode){
+   uint16_t i,j;
 
+   BYTE buffer[40];
+   uint16_t len;
+   float value;
+   memset(buffer,0x00,sizeof(buffer));
+   //unsigned long  startAddress;
+   //startAddress =(unsigned long)&RFFTin1Buff_test;
+   for(j=0;j<256;j++)
+   {
+       //sprintf((char *)&buffer,"0x%04x%04x ",(startAddress +j*16) >> 16,(startAddress +j*16) & 0x0000ffff );
+       sprintf((char *)&buffer,"0x%04x%04x\t",(uint16_t)((startAddress +j*16) >> 16 ),(uint16_t)((startAddress +j*16) & 0x0000ffff) );
+       len =strlen((char *)buffer);
+       SCIwrite((char *)buffer,len);
+
+       for(i=0; i<16 ; i++)
+       {
+           memset(buffer,0x00,sizeof(buffer));
+           value =((3.0/4096.0* HWREGH(startAddress+16*j+i)) - 1.5);
+           //value -= 1.5;
+           //value = value * 3.0/4096.0 ;
+           //value *= 4.0;
+           value *= 4.0* 1000;
+           if(mode==0)
+           sprintf((char *)&buffer,"%04x\t",HWREGH(startAddress+16*j+i));
+           else if(mode==1)
+           sprintf((char *)&buffer,"%d.%03d\t",((int)value / 1000) ,((int)value % 1000)  );
+           len =strlen((char *)buffer);
+           SCIwrite((char *)buffer,len);
+           //SCIprintf("%x:",*(RFFTin1Buff_test+i));
+       }
+       SCIprintf("\r\n");
+   }
+
+     return 0;
+
+}
 int Cmd_dump(int argc, char *argv[])
 {
+    BYTE buffer[40];
+    uint16_t displaymode=0;
+    int16_t pos =0;
+    unsigned long address=(unsigned long)&RFFTin1Buff_test;
+    if(argc <2 ){
+         displaymode=0;
+    }
+    else if(argc <3){
+        // display mode mode
+        if(strcmp(argv[1],"-d")==0) displaymode= 1;
+        else if(strcmp(argv[1],"-h")==0) displaymode= 0;
+        else{
+            sprintf((char *)buffer,(char *)"Parmeter error..\r\n");
+            SCIwrite((char *)buffer,strlen((char *)buffer));
+            sprintf((char *)buffer,(char *)"Usage: dump [-h] [-d] memory \r\n");
+            SCIwrite((char *)buffer,strlen((char *)buffer));
+            sprintf((char *)buffer,(char *)"memory : 0 to 20 \r\n");
+            SCIwrite((char *)buffer,strlen((char *)buffer));
+            return 0;
+        }
+    }
+    else if(argc <4){
+        if(strcmp(argv[1],"-d")==0) displaymode= 1;
+        else if(strcmp(argv[1],"-h")==0) displaymode= 0;
+
+        pos = atoi(argv[2]);
+        if(pos <0 || pos > 19)
+        {
+            sprintf((char *)buffer,"Parmeter error..\r\n");
+            SCIwrite((char *)buffer,strlen((char *)buffer));
+            return 0;
+        }
+        switch(pos){
+            case 0: address=(unsigned long)&adcAResults_1;break;
+            case 1: address=(unsigned long)&adcAResults_2;break;
+            case 2: address=(unsigned long)&adcAResults_3;break;
+            case 3: address=(unsigned long)&adcAResults_4;break;
+            case 4: address=(unsigned long)&adcAResults_5;break;
+            case 5: address=(unsigned long)&adcAResults_6;break;
+            case 6: address=(unsigned long)&adcAResults_7;break;
+            case 7: address=(unsigned long)&adcAResults_8;break;
+            case 8: address=(unsigned long)&adcAResults_9;break;
+            case 9: address=(unsigned long)&adcAResults_10;break;
+            case 10: address=(unsigned long)&adcAResults_11;break;
+            case 11: address=(unsigned long)&adcAResults_12;break;
+            case 12: address=(unsigned long)&adcAResults_13;break;
+            case 13: address=(unsigned long)&adcAResults_14;break;
+            case 14: address=(unsigned long)&adcAResults_15;break;
+            case 15: address=(unsigned long)&adcAResults_16;break;
+            case 16: address=(unsigned long)&adcAResults_17;break;
+            case 17: address=(unsigned long)&adcAResults_18;break;
+            case 18: address=(unsigned long)&adcAResults_19;break;
+            case 19: address=(unsigned long)&adcAResults_20;break;
+            default:address=(unsigned long)&adcAResults_1;break;
+        }
+    }
+    //메로리를 LOCK 한다.
+
+    while(!((HWREG(IPC_BASE + IPC_O_STS) & (IPC_STS_IPC0 << pos  )) == 0 )){
+
+    }
+    HWREG(IPC_BASE + IPC_O_SET) = (IPC_SET_IPC0 << pos) ; // 데이타를 작업하겠다고 CPU1 알려 준다.
+    memory_dump(address,displaymode);
+    HWREG(IPC_BASE + IPC_O_CLR) =  (IPC_SET_IPC0 << pos); //클리어 시켜준다.
+    /*
    uint16_t i,j;
 
    BYTE buffer[10];
@@ -488,7 +678,6 @@ int Cmd_dump(int argc, char *argv[])
 
        for(i=0; i<16 ; i++)
        {
-           //sprintf((char *)&buffer,"%04x ",*(RFFTin1Buff_test+16*j+i));
            sprintf((char *)&buffer,"%04x ",HWREGH(startAddress+16*j+i));
            len =strlen((char *)buffer);
            SCIwrite((char *)buffer,len);
@@ -496,7 +685,7 @@ int Cmd_dump(int argc, char *argv[])
        }
        SCIprintf("\r\n");
    }
-
+     */
      return 0;
 }
 

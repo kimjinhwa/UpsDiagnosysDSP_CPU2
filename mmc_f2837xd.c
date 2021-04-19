@@ -848,9 +848,14 @@ void disk_timerproc (void)
 /* FatFs module. Any valid time must be returned even if   */
 /* the system does not support a real time clock.          */
 
+extern struct rtctime_t time;
+extern void get_time();
 DWORD get_fattime (void)
 {
-
+    //time.year;
+    get_time();
+    //unsigned long year ;
+    //year = (unsigned long )time.year;
     return    ((2008UL-1980) << 25)    // Year = 2008
               | (2UL << 21)            // Month = February
               | (26UL << 16)            // Day = 26
@@ -858,5 +863,13 @@ DWORD get_fattime (void)
               | (0U << 5)            // Min = 0
               | (0U >> 1)                // Sec = 0
               ;
-
+    /*
+    return    ((2008UL-1980) << 25)    // Year = 2008
+              | (2UL << 21)            // Month = February
+              | (26UL << 16)            // Day = 26
+              | (14U << 11)            // Hour = 14
+              | (0U << 5)            // Min = 0
+              | (0U >> 1)                // Sec = 0
+              ;
+    */
 }

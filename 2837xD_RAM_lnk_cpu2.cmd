@@ -8,6 +8,7 @@ PAGE 0 :
    RAMM0           	: origin = 0x0000A2, length = 0x00035E
    RAMD0           	: origin = 0x00B000, length = 0x000800
    RAMLS_01234          : origin = 0x008000, length = 0x002800
+   RAMGS2      : origin = 0x00E000, length = 0x001000
    RAMGS5      : origin = 0x011000, length = 0x001000
    //RAMLS0          : origin = 0x008000, length = 0x000800
    //RAMLS1          	: origin = 0x008800, length = 0x000800
@@ -27,12 +28,19 @@ PAGE 1 :
    RAMLS5      : origin = 0x00A800, length = 0x000800
 
 // CPU2 2 3 4 5
-   RAMGS2      : origin = 0x00E000, length = 0x001000
    RAMGS3      : origin = 0x00F000, length = 0x001000
    RAMGS4      : origin = 0x010000, length = 0x001000
 
    RAMGS6      : origin = 0x012000, length = 0x001000
    RAMGS7      : origin = 0x013000, length = 0x001000
+   RAMGS8      : origin = 0x014000, length = 0x001000
+   RAMGS9      : origin = 0x015000, length = 0x001000
+   RAMGS10     : origin = 0x016000, length = 0x001000
+   RAMGS11     : origin = 0x017000, length = 0x001000     /* Only Available on F28379D, F28377D, F28375D devices. Remove line on other devices. */
+   RAMGS12     : origin = 0x018000, length = 0x001000     /* Only Available on F28379D, F28377D, F28375D devices. Remove line on other devices. */
+   RAMGS13     : origin = 0x019000, length = 0x001000     /* Only Available on F28379D, F28377D, F28375D devices. Remove line on other devices. */
+   RAMGS14     : origin = 0x01A000, length = 0x001000     /* Only Available on F28379D, F28377D, F28375D devices. Remove line on other devices. */
+   RAMGS15     : origin = 0x01B000, length = 0x000FF8     /* Only Available on F28379D, F28377D, F28375D devices. Remove line on other devices. */
 
    CANA_MSG_RAM     : origin = 0x049000, length = 0x000800
    CANB_MSG_RAM     : origin = 0x04B000, length = 0x000800
@@ -45,7 +53,8 @@ PAGE 1 :
 SECTIONS
 {
    codestart        : > BEGIN,     PAGE = 0
-   .text            : >>RAMD0 |  RAMLS_01234 | 	RAMGS5       ,   PAGE = 0
+   .text            : >>   RAMLS_01234 | RAMGS2	| RAMGS5       ,   PAGE = 0
+   //.text            : >> RAMD0 |  RAMLS_01234 | 	RAMGS5       ,   PAGE = 0
    //.text            : >> RAMD0 |  RAMGS2to6_combined ,   PAGE = 0
    .cinit           : > RAMM0,     PAGE = 0
    .switch          : > RAMM0,     PAGE = 0
@@ -54,12 +63,12 @@ SECTIONS
 // RAMLS5-> RAMGS2
 // RAMLS3-> RAMGS3
 #if defined(__TI_EABI__)
-   .bss             : > RAMGS2,    PAGE = 1
+   .bss             : > RAMGS2,    PAGE = 0
    .bss:output      : > RAMGS3,    PAGE = 1
    .init_array      : > RAMGS4,     PAGE = 1
-   .const           : > RAMGS2,    PAGE = 1
+   .const           : > RAMGS2,    PAGE = 0
    .data            : > RAMGS4,    PAGE = 1
-   .sysmem          : > RAMGS2 | RAMGS3,    PAGE = 1
+   .sysmem          : > RAMGS3,    PAGE = 1
    //.bss             : > RAMLS5,    PAGE = 1
    //.bss:output      : > RAMLS3,    PAGE = 0
    //.init_array      : > RAMM0,     PAGE = 0
@@ -81,7 +90,16 @@ SECTIONS
    #endif
 #endif
 
-	RFFTdata1_test   : > RAMGS7 ,   PAGE = 1
+   RFFTdata1_test   : > RAMGS7 ,   PAGE = 1
+   RFFTdata1        : > RAMGS8 ,   PAGE = 1
+   RFFTdata2        : > RAMGS9 ,   PAGE = 1
+   RFFTdata3        : > RAMGS9 ,   PAGE = 1
+   RFFTdata4        : > RAMGS9 ,   PAGE = 1
+   ADCBUFFER1		: > RAMGS10,   PAGE = 1
+   ADCBUFFER2		: > RAMGS11,   PAGE = 1
+   ADCBUFFER3		: > RAMGS12,   PAGE = 1
+   ADCBUFFER4		: > RAMGS13,   PAGE = 1
+   ADCBUFFER5		: > RAMGS14,   PAGE = 1
    /* The following section definitions are required when using the IPC API Drivers */
     GROUP : > CPU2TOCPU1RAM, PAGE = 1
     {
