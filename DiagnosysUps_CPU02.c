@@ -20,8 +20,13 @@
 #define RFFT_STAGES     9
 #define RFFT_SIZE       (1 << RFFT_STAGES)
 
+#pragma DATA_SECTION(RFFTin1Buff,"RFFTdata1")
+uint16_t RFFTin1Buff[2*RFFT_SIZE];
+
 #pragma DATA_SECTION(RFFTin1Buff_test,"RFFTdata1_test")
-uint16_t RFFTin1Buff_test[4096];
+//uint16_t RFFTin1Buff_test[4096];
+uint16_t RFFTin1Buff_test[1024];
+
 #pragma DATA_SECTION(RFFTmagBuff,"RFFTdata2")
 float RFFTmagBuff[RFFT_SIZE/2+1];
 #pragma DATA_SECTION(RFFToutBuff,"RFFTdata3")
@@ -76,13 +81,14 @@ uint16_t adcAResults_19[RESULTS_BUFFER_SIZE];   // Buffer for results
 uint16_t adcAResults_20[RESULTS_BUFFER_SIZE];   // Buffer for results
 
 
+struct st_fft_result {
+    float maxValue;
+    float freq;
+    float THD ;
+};
 
-
-
-
-
-
-
+#pragma DATA_SECTION(fft_result,"GETBUFFER")
+struct st_fft_result fft_result[20];
 
 #pragma DATA_SECTION(time,"GETBUFFER")
 struct rtctime_t time;
@@ -159,7 +165,7 @@ tCmdLineEntry g_psCmdTable[] =
     { "get",    Cmd_get,      "  : get text file using xmodem" },
     { "test",    Cmd_test,      "  : make test text file" },
     { "cls",    Cmd_cls,      "  : clear screen" },
-    { "dump",    Cmd_dump,      "  : Show Memory RFFTin1Buff_test" },
+    { "dump",    Cmd_dump,      "  : Show Memory RFFTin1Buff" },
     { "fft",    Cmd_fft,      "  : Get FFT Data " },
     { "time",    Cmd_time,      "  : Show Now System Time" },
     { 0, 0, 0 }
@@ -510,8 +516,9 @@ int Cmd_cls(int argc, char *argv[])
 }
 void get_time()
 {
-    HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC21;
-    while((HWREG(IPC_BASE + IPC_O_FLG) & IPC_STS_IPC21) == IPC_SET_IPC21) { };
+    HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC21;  // 요청을 한다.
+    while((HWREG(IPC_BASE + IPC_O_FLG) & IPC_STS_IPC21) == IPC_SET_IPC21) { };  // 요청된 처리가 완료 되기를 기다린다.
+                                                                                // 나중에 타임아웃을 추가하기로 한다
 }
 int Cmd_time(int argc, char *argv[])
 {
@@ -528,6 +535,9 @@ int Cmd_time(int argc, char *argv[])
    SCIprintf("\r\n");
    return 0;
 }
+
+#define F_TO_D(x) sprintf((char *)&buffer,"%d.%03d\t",((uint16_t)(x*1000) / 1000) ,((uint16_t)(x*1000) % 1000)  )
+
 int Cmd_fft(int argc, char *argv[])
 {
     BYTE buffer[30];
@@ -535,26 +545,33 @@ int Cmd_fft(int argc, char *argv[])
     memset(buffer,0x00,sizeof(buffer));
     int i=0;
 
-    //while((HWREG(IPC_BASE + IPC_O_STS) & IPC_STS_IPC1) == 0U) { }
-    //HWREG(IPC_BASE + IPC_O_ACK) = IPC_ACK_IPC0;
-    //while(request_fft != 0)DEVICE_DELAY_US(1);   //
-
-    //while((HWREG(IPC_BASE + IPC_O_STS) & IPC_STS_IPC0) != 0U){}; //사용하려는   데이타가 사용중이라면 기다린다.
-    while((HWREG(IPC_BASE + IPC_O_STS) & IPC_STS_IPC1) != IPC_STS_IPC1){
-       //DEVICE_DELAY_US(1);
-        //SCIprintf("Reached\r\n");
-    }; // 0번데이타가 사용되면 1번 데이타가 쓰기 금지로 들어간다.
+    HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC22;  // 요청을 한다.
+    while((HWREG(IPC_BASE + IPC_O_FLG) & IPC_STS_IPC22) == IPC_SET_IPC22) { };  // 요청된 처리가 완료 되기를 기다린다.
                                                                  // 따라서 1번데이타가 사용중이라고 설정되면 0번 데이타는 안전하게 사옹할 있다.
-    for(i=0;i<21;i++)
+    for(i=0;i<20;i++)
     {
-       int nowPos=request_fft;
-       sprintf((char *)&buffer,"Now fft_routine is %d",request_fft  );
-       len =strlen((char *)buffer); SCIwrite((char *)buffer,len); SCIprintf("\r\n");
-       while(request_fft == nowPos )DEVICE_DELAY_US(1);
+       //int nowPos=request_fft;
+
+       sprintf((char *)&buffer,"fft_%d\t ",i);
+       len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
+
+       F_TO_D(fft_result[i].freq);
+       len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
+       SCIprintf("\t");
+
+       F_TO_D(fft_result[i].THD);
+       len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
+
+       F_TO_D(fft_result[i].maxValue);
+       len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
+
+       SCIprintf("\r\n");
     }
-    memory_dump((unsigned long)&RFFTin1Buff_test,1);
-    HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC0; // 데이타를 작업하겠다고 CPU1 알려 준다.
-    HWREG(IPC_BASE + IPC_O_CLR) = IPC_SET_IPC0; //클리어 시켜준다.
+       //while(request_fft == nowPos )DEVICE_DELAY_US(1);
+    //fft_result
+    //memory_dump((unsigned long)&RFFTin1Buff,1);
+    //HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC0; // 데이타를 작업하겠다고 CPU1 알려 준다.
+    //HWREG(IPC_BASE + IPC_O_CLR) = IPC_SET_IPC0; //클리어 시켜준다.
    return 0;
 }
 
@@ -566,8 +583,9 @@ int memory_dump(unsigned long   startAddress,uint16_t mode){
    float value;
    memset(buffer,0x00,sizeof(buffer));
    //unsigned long  startAddress;
-   //startAddress =(unsigned long)&RFFTin1Buff_test;
-   for(j=0;j<256;j++)
+   //startAddress =(unsigned long)&RFFTin1Buff;
+   //for(j=0;j<256;j++)
+   for(j=0;j<65;j++)
    {
        //sprintf((char *)&buffer,"0x%04x%04x ",(startAddress +j*16) >> 16,(startAddress +j*16) & 0x0000ffff );
        sprintf((char *)&buffer,"0x%04x%04x\t",(uint16_t)((startAddress +j*16) >> 16 ),(uint16_t)((startAddress +j*16) & 0x0000ffff) );
@@ -588,11 +606,10 @@ int memory_dump(unsigned long   startAddress,uint16_t mode){
            sprintf((char *)&buffer,"%d.%03d\t",((int)value / 1000) ,((int)value % 1000)  );
            len =strlen((char *)buffer);
            SCIwrite((char *)buffer,len);
-           //SCIprintf("%x:",*(RFFTin1Buff_test+i));
+           //SCIprintf("%x:",*(RFFTin1Buff+i));
        }
        SCIprintf("\r\n");
    }
-
      return 0;
 
 }
@@ -601,7 +618,7 @@ int Cmd_dump(int argc, char *argv[])
     BYTE buffer[40];
     uint16_t displaymode=0;
     int16_t pos =0;
-    unsigned long address=(unsigned long)&RFFTin1Buff_test;
+    //unsigned long address=(unsigned long)&RFFTin1Buff;
     if(argc <2 ){
          displaymode=0;
     }
@@ -630,6 +647,18 @@ int Cmd_dump(int argc, char *argv[])
             SCIwrite((char *)buffer,strlen((char *)buffer));
             return 0;
         }
+        //메모리를 복사해 온다.
+
+        HWREG(IPC_BASE + IPC_O_SET) =  (1UL << (pos+1)); //IPC_SET_IPC21;  // 요청을 한다.
+        while((HWREG(IPC_BASE + IPC_O_FLG) & (1UL << (pos+1)) ) == (1UL << (pos+1))) { };  // 요청된 처리가 완료 되기를 기다린다.
+
+        int i;
+        for(i=0;i < 1024;i++){
+            HWREGH(RFFTin1Buff_test+i) = HWREGH(RFFTin1Buff +i);
+        }
+        memory_dump((unsigned long)&RFFTin1Buff_test,displaymode);
+        //memory_dump((unsigned long)&RFFTin1Buff_test,1);
+        /*
         switch(pos){
             case 0: address=(unsigned long)&adcAResults_1;break;
             case 1: address=(unsigned long)&adcAResults_2;break;
@@ -653,15 +682,14 @@ int Cmd_dump(int argc, char *argv[])
             case 19: address=(unsigned long)&adcAResults_20;break;
             default:address=(unsigned long)&adcAResults_1;break;
         }
+        */
     }
-    //메로리를 LOCK 한다.
-
-    while(!((HWREG(IPC_BASE + IPC_O_STS) & (IPC_STS_IPC0 << pos  )) == 0 )){
-
-    }
-    HWREG(IPC_BASE + IPC_O_SET) = (IPC_SET_IPC0 << pos) ; // 데이타를 작업하겠다고 CPU1 알려 준다.
-    memory_dump(address,displaymode);
-    HWREG(IPC_BASE + IPC_O_CLR) =  (IPC_SET_IPC0 << pos); //클리어 시켜준다.
+    //메모리를 LOCK 한다.
+    //메모리를 읽어도 되는 상황인지 즉 락이 걸려 있는지를 확인 한 후  락이 걸려 있지 않으면 메모리를 점유하여 읽는 동안 데이타에 쓰지 못하게 막는다.
+    //while(!((HWREG(IPC_BASE + IPC_O_STS) & (IPC_STS_IPC0 << pos  )) == 0 )){ }
+    //HWREG(IPC_BASE + IPC_O_SET) = (IPC_SET_IPC0 << pos) ; // 데이타를 작업하겠다고 CPU1 알려 준다.
+    //memory_dump(address,displaymode);
+    //HWREG(IPC_BASE + IPC_O_CLR) =  (IPC_SET_IPC0 << pos); //클리어 시켜준다.
     /*
    uint16_t i,j;
 
@@ -669,10 +697,10 @@ int Cmd_dump(int argc, char *argv[])
    uint16_t len;
    memset(buffer,0x00,sizeof(buffer));
    unsigned long  startAddress;
-   startAddress =(unsigned long)&RFFTin1Buff_test;
+   startAddress =(unsigned long)&RFFTin1Buff;
    for(j=0;j<256;j++)
    {
-       sprintf((char *)&buffer,"0x%08p ",(RFFTin1Buff_test +j*16));
+       sprintf((char *)&buffer,"0x%08p ",(RFFTin1Buff+j*16));
        len =strlen((char *)buffer);
        SCIwrite((char *)buffer,len);
 
@@ -681,7 +709,7 @@ int Cmd_dump(int argc, char *argv[])
            sprintf((char *)&buffer,"%04x ",HWREGH(startAddress+16*j+i));
            len =strlen((char *)buffer);
            SCIwrite((char *)buffer,len);
-           //SCIprintf("%x:",*(RFFTin1Buff_test+i));
+           //SCIprintf("%x:",*(RFFTin1Buff+i));
        }
        SCIprintf("\r\n");
    }

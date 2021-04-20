@@ -10,6 +10,8 @@ PAGE 0 :
    RAMLS_01234          : origin = 0x008000, length = 0x002800
    RAMGS2      : origin = 0x00E000, length = 0x001000
    RAMGS5      : origin = 0x011000, length = 0x001000
+
+   RAMGS7      : origin = 0x013000, length = 0x001000
    //RAMLS0          : origin = 0x008000, length = 0x000800
    //RAMLS1          	: origin = 0x008800, length = 0x000800
    //RAMLS2      		: origin = 0x009000, length = 0x000800
@@ -32,7 +34,7 @@ PAGE 1 :
    RAMGS4      : origin = 0x010000, length = 0x001000
 
    RAMGS6      : origin = 0x012000, length = 0x001000
-   RAMGS7      : origin = 0x013000, length = 0x001000
+
    RAMGS8      : origin = 0x014000, length = 0x001000
    RAMGS9      : origin = 0x015000, length = 0x001000
    RAMGS10     : origin = 0x016000, length = 0x001000
@@ -63,7 +65,7 @@ SECTIONS
 // RAMLS5-> RAMGS2
 // RAMLS3-> RAMGS3
 #if defined(__TI_EABI__)
-   .bss             : > RAMGS2,    PAGE = 0
+   .bss             : > RAMGS2 | RAMGS7,     PAGE = 0
    .bss:output      : > RAMGS3,    PAGE = 1
    .init_array      : > RAMGS4,     PAGE = 1
    .const           : > RAMGS2,    PAGE = 0
@@ -90,7 +92,7 @@ SECTIONS
    #endif
 #endif
 
-   RFFTdata1_test   : > RAMGS7 ,   PAGE = 1
+   RFFTdata1_test   : > RAMGS7 ,   PAGE = 0  // for CPU2
    RFFTdata1        : > RAMGS8 ,   PAGE = 1
    RFFTdata2        : > RAMGS9 ,   PAGE = 1
    RFFTdata3        : > RAMGS9 ,   PAGE = 1
