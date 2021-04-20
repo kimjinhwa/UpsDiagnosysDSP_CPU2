@@ -1,0 +1,106 @@
+
+    //DMA_startChannel(DMA_CH6_BASE);
+    //Test for fft...if request_fft is assigned then copy data to fft memory also.
+    //DMA_configAddresses(DMA_CH6_BASE,RFFTin1Buff , (const void *)adcAResults_3);
+    //DMA_startChannel(DMA_CH6_BASE);
+
+    //const void *srcAddr;
+    //time.year=2021;time.month=3;time.day=11;time.hour=12;time.minute=11;time.second=0;
+    //ds1338_write_time(&time);
+    ds1338_read_time(&time);
+    //Device_cal(); // copy the trim value for ADC
+    //ADC_setOFFSETTRIM();
+    //ADC_setINLTRIM();
+
+        // fft루틴을 수행하기 위해 adc 인터럽트 Reading에 데이타를 카피 해달라고 요청한다.
+        // 그러면 adc루틴은 현재의 index에서부터 1024개의 데이타를 fft 계산 버퍼에 카피한후 falg한다.
+        //memoryRequestCopy =
+        //while(!memoryCopyComplete);//메모리 카피가 완료되기를 기다린다.
+
+        if(dmaCopydone ){
+           // memoryCopyComplete = 0;  //이렇게 하면 데이타카피가 이루어진다.
+            //fft_routine(); // <note_1> 105519  sysclk is need. fft routine test
+            // FFT Memory Filled with valid data.
+            //memoryCopyComplete = 0;
+
+            //HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC1;
+            // HWREGH(RAM_ADCBUFFER1 + (int)(request_fft/5)*0x1000 + RESULTS_BUFFER_SIZE*(request_fft%5) ) ;
+            // 메모리를  읽고 있지 않다면, 즉 CPU2에서 읽는 상황이 아니라면 메모리를 점유하고 데이타를 옮긴다.
+            // FFT까지 완료 하고 나서 사용할 수 있게 하여 준다
+            // 예를 들어 CPU2에서 1번 메모리를 읽고자 하면 1번 메모리의 상태가 락이걸릴때 까지 기다린다.
+            // 락이 걸렸다면 이제 1번 메모리가 FFT영역에 복사되고 FFT가 수행된다.
+            // CPU1에서 FFT 수행이 끝나고 나면 결과 데이타는 별도의 메모리에 ICP 메모리에 옮겨 지며,
+            // 이때 1번메모리에 데이타를 FFT영역에 옮기고 FFT의 수행이 끝났을 때,
+            // IPC_SET_IPC21에 set을 한다.
+            // CPU2에서 fft를 읽고 싶다면 IPC를 클리어
+            // CPU2에서는 즉시 메모리1번에 Lock를 걸어준다.
+        }
+        //memoryRequestCopy
+            // IPC0은 아무리 해도 셋이 되지를 않는다.
+            // 0은 설정이 안되서 테스트 하기위하여 해본다.
+            //if(request_fft == 0)HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC0;
+            // 따라서 사용하지 않기로 한다.
+                //if(request_fft == 0)HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC0;
+
+                //HWREG(IPC_BASE + IPC_O_SET) = (uint32_t)(1U<<request_fft);//IPC_SET_IPC1;현재 작업중인 포인트를 알려 준다.
+
+                // when used for dma
+                //DMA_configAddresses(DMA_CH6_BASE,RFFTin1Buff , srcAddr);
+                //DMA_enableTrigger(DMA_CH6_BASE);
+                //DMA_startChannel(DMA_CH6_BASE);
+ 
+
+            //HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC1;
+            //while((HWREG(IPC_BASE + IPC_O_STS) & IPC_STS_IPC1) == 0U)
+            //DMA_disableTrigger(DMA_CH6_BASE);
+            //srcAddr =(const void *)(adcAResults_1 + (int)(request_fft/5)*0x1000 + RESULTS_BUFFER_SIZE*(request_fft%5)  ) ;
+/*
+            switch(request_fft){
+                case 0: srcAddr =(const void *)(adcAResults_1 ); break;
+                case 1: srcAddr =(const void *)(adcAResults_2 );break;
+                case 2: srcAddr =(const void *)(adcAResults_3 );break;
+                case 3: srcAddr =(const void *)(adcAResults_4 );break;
+                case 4: srcAddr =(const void *)(adcAResults_5 );break;
+                case 5: srcAddr =(const void *)(adcAResults_6 );break;
+                case 6: srcAddr =(const void *)(adcAResults_7 );break;
+                case 7: srcAddr =(const void *)(adcAResults_8 );break;
+                case 8: srcAddr =(const void *)(adcAResults_9 );break;
+                case 9: srcAddr =(const void *)(adcAResults_10 );break;
+                case 10: srcAddr =(const void *)(adcAResults_11 );break;
+                case 11: srcAddr =(const void *)(adcAResults_12 );break;
+                case 12: srcAddr =(const void *)(adcAResults_13 );break;
+                case 13: srcAddr =(const void *)(adcAResults_14 );break;
+                case 14: srcAddr =(const void *)(adcAResults_15 );break;
+                case 15: srcAddr =(const void *)(adcAResults_16 );break;
+                case 16: srcAddr =(const void *)(adcAResults_17 );break;
+                case 17: srcAddr =(const void *)(adcAResults_18 );break;
+                case 18: srcAddr =(const void *)(adcAResults_19);break;
+                case 19: srcAddr =(const void *)(adcAResults_20 );break;
+                default: srcAddr =(const void *)(adcAResults_1 );  break;
+            }
+*/
+
+                /*
+                switch(request_fft){
+                case 0: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC0; break;
+                case 1: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC1; break;
+                case 2: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC2; break;
+                case 3: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC3; break;
+                case 4: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC4; break;
+                case 5: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC5; break;
+                case 6: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC6; break;
+                case 7: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC7; break;
+                case 8: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC8; break;
+                case 9: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC9; break;
+                case 10: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC10; break;
+                case 11: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC11; break;
+                case 12: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC12; break;
+                case 13: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC13; break;
+                case 14: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC14; break;
+                case 15: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC15; break;
+                case 16: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC16; break;
+                case 17: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC17; break;
+                case 18: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC18; break;
+                case 19: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC19; break;
+                }
+                */
