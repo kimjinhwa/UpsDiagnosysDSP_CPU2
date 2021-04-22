@@ -187,7 +187,7 @@ void main(void)
     /*
     if(GPIO_readPin(SD_DETECT) ==0)
     {
-       SCIprintf("\n\nSDC Card Inserted!\n");
+       SCIprintf("\n\nSDC Card Inserted!\n")/
     }
     */
 
@@ -574,7 +574,7 @@ int Cmd_fft(int argc, char *argv[])
     //HWREG(IPC_BASE + IPC_O_CLR) = IPC_SET_IPC0; //클리어 시켜준다.
    return 0;
 }
-
+char * ftoa(float f, char * buf, int precision);
 int memory_dump(unsigned long   startAddress,uint16_t mode){
    uint16_t i,j;
 
@@ -585,7 +585,7 @@ int memory_dump(unsigned long   startAddress,uint16_t mode){
    //unsigned long  startAddress;
    //startAddress =(unsigned long)&RFFTin1Buff;
    //for(j=0;j<256;j++)
-   for(j=0;j<65;j++)
+   for(j=0;j<64;j++)
    {
        //sprintf((char *)&buffer,"0x%04x%04x ",(startAddress +j*16) >> 16,(startAddress +j*16) & 0x0000ffff );
        sprintf((char *)&buffer,"0x%04x%04x\t",(uint16_t)((startAddress +j*16) >> 16 ),(uint16_t)((startAddress +j*16) & 0x0000ffff) );
@@ -595,15 +595,24 @@ int memory_dump(unsigned long   startAddress,uint16_t mode){
        for(i=0; i<16 ; i++)
        {
            memset(buffer,0x00,sizeof(buffer));
-           value =((3.0/4096.0* HWREGH(startAddress+16*j+i)) - 1.5);
-           //value -= 1.5;
-           //value = value * 3.0/4096.0 ;
+           //value =((3.0/4096.0* HWREGH(startAddress+16*j+i)) - 1.5);
+           if(HWREGH(startAddress+16*j+i) >= 0x0821 )
+           value =  (HWREGH(startAddress+16*j+i)-0x0821 )  ;
+           else value =0;
+
+           value = value * 3.0/4096.0 ;
+
+           //value -= 1.5241699217f;
            //value *= 4.0;
-           value *= 4.0* 1000;
-           if(mode==0)
+           //value *= 4.0* 1000;
+           //value *= 1000000;
+           if(mode==0){
            sprintf((char *)&buffer,"%04x\t",HWREGH(startAddress+16*j+i));
-           else if(mode==1)
-           sprintf((char *)&buffer,"%d.%03d\t",((int)value / 1000) ,((int)value % 1000)  );
+           }
+           else if(mode==1){
+               ftoa(value,(char *)&buffer,3);
+               strcat((char *)buffer,"\t");
+           }
            len =strlen((char *)buffer);
            SCIwrite((char *)buffer,len);
            //SCIprintf("%x:",*(RFFTin1Buff+i));
