@@ -1,3 +1,9 @@
+//IPC_SET_IPC0  booting
+//IPC_SET_IPC1~20 Memory Request
+//IPC_SET_IPC21 time
+//IPC_SET_IPC22 fft
+//IPC_SET_IPC23 offset_changed
+
 #include <CpuTimer1_2.h>
 #include "driverlib.h"
 #include "device.h"
@@ -14,6 +20,8 @@
 #include "fatfs/src/ff.h"
 #include "cmdline.h"
 #include "ds1338z_Rtc.h"
+#include "cpuFlashMemory.h"
+
 // For Serial Command Line
 
 #define RESULTS_BUFFER_SIZE     1024
@@ -87,11 +95,16 @@ struct st_fft_result {
     float THD ;
 };
 
+#pragma DATA_SECTION(offsetValue,"PUTBUFFER")
+uint16_t offsetValue[24];
+
 #pragma DATA_SECTION(fft_result,"GETBUFFER")
-struct st_fft_result fft_result[20];
+struct st_fft_result fft_result[5][20];
 
 #pragma DATA_SECTION(time,"GETBUFFER")
 struct rtctime_t time;
+
+
 
 #pragma DATA_SECTION(request_fft,"GETBUFFER")
 uint16_t request_fft;
@@ -128,10 +141,13 @@ int Cmd_del(int argc, char *argv[]);
 int Cmd_get(int argc, char *argv[]);
 int Cmd_cls(int argc, char *argv[]);
 int Cmd_dump(int argc, char *argv[]);
+int Cmd_bdata(int argc, char *argv[]);
 int Cmd_fft(int argc, char *argv[]);
+int Cmd_offset(int argc, char *argv[]);
 int Cmd_time(int argc, char *argv[]);
-int memory_dump(unsigned long   startAddress,uint16_t mode);
+int memory_dump(unsigned long   startAddress,uint16_t mode,char* filename);
 void get_time();
+char * ftoa(float f, char * buf, int precision);
 
 volatile tState g_eState;
 volatile tState g_eUIState;
@@ -139,9 +155,6 @@ static DIR g_sDirObject;
 static char g_cCmdBuf[CMD_BUF_SIZE];
 static char g_cCwdBuf[PATH_BUF_SIZE] = "/";
 static char g_cTmpBuf[PATH_BUF_SIZE];
-static FILINFO g_sFileInfo;
-static FIL g_sFileObject;
-
 static FILINFO g_sFileInfo;
 static FIL g_sFileObject;
 
@@ -165,8 +178,10 @@ tCmdLineEntry g_psCmdTable[] =
     { "get",    Cmd_get,      "  : get text file using xmodem" },
     { "test",    Cmd_test,      "  : make test text file" },
     { "cls",    Cmd_cls,      "  : clear screen" },
-    { "dump",    Cmd_dump,      "  : Show Memory RFFTin1Buff" },
+    { "dump",    Cmd_dump,      "  : Show Memory RFFTin1Buff  :ex) dump -h 0 > dump01.txt " },
     { "fft",    Cmd_fft,      "  : Get FFT Data " },
+    { "offset",    Cmd_offset,      "  : Offset Adc for 0 to 19 " },
+    { "bdata",    Cmd_bdata,      "  : Get Hex Data -> For Dedicated software " },
     { "time",    Cmd_time,      "  : Show Now System Time" },
     { 0, 0, 0 }
 };
@@ -174,6 +189,15 @@ tCmdLineEntry g_psCmdTable[] =
 void main(void)
 {
     Device_init();
+    //CPU1이 부팅되기를 기다린다
+    uint16_t delayCount=0;
+    while((HWREG(IPC_BASE + IPC_O_STS) & IPC_STS_IPC0) == 0U)
+    {
+        DEVICE_DELAY_US(1000000);// 125*1024 128us at 8Khz    128us
+        if(delayCount++ > 4) break;
+        //break;
+    }
+    HWREG(IPC_BASE + IPC_O_ACK)  = IPC_ACK_IPC0 ;
     Device_initGPIO();
 	MemCfg_setGSRAMMasterSel(MEMCFG_SECT_GS2,MEMCFG_GSRAMMASTER_CPU2);
 	MemCfg_setGSRAMMasterSel(MEMCFG_SECT_GS3,MEMCFG_GSRAMMASTER_CPU2);
@@ -247,52 +271,20 @@ void ReadLine(void)
     g_cCmdBuf[0] = '\0';
     ulIdx = 0;
     ulPrompt = 1;
-    while(1){
-        if(g_eState == STATE_DEVICE_ENUM) // See if a mass storage device has been enumerated.
+    while(1)
+    {
+        if(g_eState == STATE_DEVICE_ENUM)
         {
-            //
-            // Take it easy on the Mass storage device if it is slow to
-            // start up after connecting.
-            //
-            //
-            //if(USBHMSCDriveReady(g_psMSCInstance) != 0)
-            //{
-                //
-                // Wait about 100ms before attempting to check if the
-                // device is ready again.
-                //
-             //   SysCtl_delay(SysCtl_getClock(DEVICE_OSCSRC_FREQ)/30);
-
-              //  break;
-            //}
-            ///
-
-            //
-            // Reset the working directory to the root.
-            //
             g_cCwdBuf[0] = '/';
             g_cCwdBuf[1] = '\0';
 
-            //
-            // Attempt to open the directory.  Some drives take longer to
-            // start up than others, and this may fail (even though the USB
-            // device has enumerated) if it is still initializing.
-            //
             f_mount(0, &FatFs);
             if(f_opendir(&g_sDirObject, g_cCwdBuf) == FR_OK)
             {
-                //
-                // The drive is fully ready, so move to that state.
-                //
                 g_eState = STATE_DEVICE_READY;
             }
         }
 
-        //
-        // See if the state has changed.  We make a copy of g_eUIState to
-        // prevent a compiler warning about undefined order of volatile
-        // accesses.
-        //
         eStateCopy = g_eUIState;
         if(g_eState != eStateCopy)
         {
@@ -458,11 +450,6 @@ void ReadLine(void)
                 SCIprintf("%c", (uint32_t)ui8Char);
             }
         }
-
-        //
-        // Run the main routine of the Host controller driver.
-        //
-        //USBHCDMain();
    }
 }
 
@@ -536,35 +523,39 @@ int Cmd_time(int argc, char *argv[])
    return 0;
 }
 
-#define F_TO_D(x) sprintf((char *)&buffer,"%d.%03d\t",((uint16_t)(x*1000) / 1000) ,((uint16_t)(x*1000) % 1000)  )
-
 int Cmd_fft(int argc, char *argv[])
 {
     BYTE buffer[30];
     uint16_t len;
     memset(buffer,0x00,sizeof(buffer));
     int i=0;
+    int nth=0;
 
     HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC22;  // 요청을 한다.
     while((HWREG(IPC_BASE + IPC_O_FLG) & IPC_STS_IPC22) == IPC_SET_IPC22) { };  // 요청된 처리가 완료 되기를 기다린다.
                                                                  // 따라서 1번데이타가 사용중이라고 설정되면 0번 데이타는 안전하게 사옹할 있다.
+    sprintf((char *)&buffer,"NO\t"); len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
+    sprintf((char *)&buffer,"THD\t\t"); len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
+    for(nth=0;nth<5;nth++){
+        sprintf((char *)&buffer,"FREQ\t\t"); len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
+        sprintf((char *)&buffer,"MAX\t\t"); len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
+    }
+    SCIprintf("\r\n");
+
     for(i=0;i<20;i++)
     {
        //int nowPos=request_fft;
+       memset(buffer,0x00,sizeof(buffer));
+       sprintf((char *)&buffer,"fft_%d\t ",i); len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
+       memset(buffer,0x00,sizeof(buffer));
+       ftoa(fft_result[0][i].THD, (char *)buffer, 3); len =strlen((char *)buffer); SCIwrite((char *)buffer,len); SCIprintf("\t\t");
 
-       sprintf((char *)&buffer,"fft_%d\t ",i);
-       len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
-
-       F_TO_D(fft_result[i].freq);
-       len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
-       SCIprintf("\t");
-
-       F_TO_D(fft_result[i].THD);
-       len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
-
-       F_TO_D(fft_result[i].maxValue);
-       len =strlen((char *)buffer); SCIwrite((char *)buffer,len);
-
+        for(nth=0;nth<5;nth++){
+           memset(buffer,0x00,sizeof(buffer));
+           ftoa(fft_result[nth][i].freq, (char *)buffer, 1); len =strlen((char *)buffer); SCIwrite((char *)buffer,len); SCIprintf("\t\t");
+           memset(buffer,0x00,sizeof(buffer));
+           ftoa(fft_result[nth][i].maxValue, (char *)buffer, 1); len =strlen((char *)buffer); SCIwrite((char *)buffer,len);SCIprintf("\t\t");
+        }
        SCIprintf("\r\n");
     }
        //while(request_fft == nowPos )DEVICE_DELAY_US(1);
@@ -574,14 +565,25 @@ int Cmd_fft(int argc, char *argv[])
     //HWREG(IPC_BASE + IPC_O_CLR) = IPC_SET_IPC0; //클리어 시켜준다.
    return 0;
 }
-char * ftoa(float f, char * buf, int precision);
-int memory_dump(unsigned long   startAddress,uint16_t mode){
+
+    //FIL fdst;
+int memory_dump(unsigned long   startAddress,uint16_t mode,char* filename){
    uint16_t i,j;
 
    BYTE buffer[40];
-   uint16_t len;
+   BYTE filebuffer[40];
+   //uint16_t len;
    float value;
    memset(buffer,0x00,sizeof(buffer));
+   memset(filebuffer,0x00,sizeof(filebuffer));
+    FRESULT fr;
+    WORD len, bw;
+    if( f_mount(0,&FatFs)  == FR_OK) g_eState = STATE_DEVICE_READY;
+    else g_eState = STATE_NO_DEVICE;
+
+   fr= f_open(&g_sFileObject, filename, FA_CREATE_ALWAYS | FA_WRITE);
+
+   if(fr != FR_OK) { return fr; }
    //unsigned long  startAddress;
    //startAddress =(unsigned long)&RFFTin1Buff;
    //for(j=0;j<256;j++)
@@ -591,14 +593,14 @@ int memory_dump(unsigned long   startAddress,uint16_t mode){
        sprintf((char *)&buffer,"0x%04x%04x\t",(uint16_t)((startAddress +j*16) >> 16 ),(uint16_t)((startAddress +j*16) & 0x0000ffff) );
        len =strlen((char *)buffer);
        SCIwrite((char *)buffer,len);
+       //f_write(&g_sFileObject,(char *)buffer,len,&bw);
 
        for(i=0; i<16 ; i++)
        {
            memset(buffer,0x00,sizeof(buffer));
            //value =((3.0/4096.0* HWREGH(startAddress+16*j+i)) - 1.5);
-           if(HWREGH(startAddress+16*j+i) >= 0x0821 )
-           value =  (HWREGH(startAddress+16*j+i)-0x0821 )  ;
-           else value =0;
+           value =  (float)(HWREGH(startAddress+16*j+i))  ;
+
 
            value = value * 3.0/4096.0 ;
 
@@ -607,128 +609,169 @@ int memory_dump(unsigned long   startAddress,uint16_t mode){
            //value *= 4.0* 1000;
            //value *= 1000000;
            if(mode==0){
-           sprintf((char *)&buffer,"%04x\t",HWREGH(startAddress+16*j+i));
+               sprintf((char *)&buffer,"%04x\t",HWREGH(startAddress+16*j+i));
+               sprintf((char *)&filebuffer,"%04x\t",HWREGH(startAddress+16*j+i));
            }
            else if(mode==1){
                ftoa(value,(char *)&buffer,3);
                strcat((char *)buffer,"\t");
+
+               ltoa(16*j+i,(char *)&filebuffer ,10);
+               strcat((char*)filebuffer,",");
+
+               len = strlen((char*)filebuffer);
+               ftoa(value,(char *)(filebuffer+len),3);
+               strcat((char *)filebuffer,"\r\n");
            }
            len =strlen((char *)buffer);
            SCIwrite((char *)buffer,len);
+
+           len =strlen((char *)filebuffer);
+           f_write(&g_sFileObject,(char *)filebuffer,len,&bw);
            //SCIprintf("%x:",*(RFFTin1Buff+i));
        }
        SCIprintf("\r\n");
+       //f_write(&g_sFileObject,(char *)"\r\n",2,&bw);
    }
+     f_close(&g_sFileObject);
      return 0;
 
 }
+
+int Cmd_bdata(int argc, char *argv[])
+{
+    int16_t pos=0;
+    int16_t i;
+    char filename[40];
+    strcpy(filename,"dump.txt");
+    if(argc == 2) pos = atoi(argv[1]);
+    else pos = 0;
+
+    HWREG(IPC_BASE + IPC_O_SET) =  (1UL << (pos+1)); //IPC_SET_IPC21;  // 요청을 한다.
+    while((HWREG(IPC_BASE + IPC_O_FLG) & (1UL << (pos+1)) ) == (1UL << (pos+1))) { };  // 요청된 처리가 완료 되기를 기다린다.
+    HWREG(IPC_BASE + IPC_O_ACK) = IPC_ACK_IPC0;
+    for(i=0;i < 1024;i++){
+        HWREGH(RFFTin1Buff_test+i) = HWREGH(RFFTin1Buff +i);
+    }
+    for(i=0;i<10;i++)
+    SCI_writeCharBlockingNonFIFO(SCIC_BASE,0xFF);
+    for(i=0;i<1024;i++)
+    {
+        SCI_writeCharBlockingNonFIFO(SCIC_BASE, HWREGH(RFFTin1Buff_test+i) >> 8 );
+        SCI_writeCharBlockingNonFIFO(SCIC_BASE, HWREGH(RFFTin1Buff_test+i) & 0x00FF);
+    }
+    return 0;
+}
+
 int Cmd_dump(int argc, char *argv[])
 {
-    BYTE buffer[40];
     uint16_t displaymode=0;
-    int16_t pos =0;
-    //unsigned long address=(unsigned long)&RFFTin1Buff;
-    if(argc <2 ){
-         displaymode=0;
-    }
-    else if(argc <3){
-        // display mode mode
-        if(strcmp(argv[1],"-d")==0) displaymode= 1;
-        else if(strcmp(argv[1],"-h")==0) displaymode= 0;
-        else{
-            sprintf((char *)buffer,(char *)"Parmeter error..\r\n");
-            SCIwrite((char *)buffer,strlen((char *)buffer));
-            sprintf((char *)buffer,(char *)"Usage: dump [-h] [-d] memory \r\n");
-            SCIwrite((char *)buffer,strlen((char *)buffer));
-            sprintf((char *)buffer,(char *)"memory : 0 to 20 \r\n");
-            SCIwrite((char *)buffer,strlen((char *)buffer));
-            return 0;
+    int16_t pos=0;
+    int16_t i;
+    char filename[40];
+    strcpy(filename,"dump.txt");
+    for(i = 1; i<argc;i++){
+        if(strcmp(argv[i],"-d")==0)      displaymode= 1;
+        else if(strcmp(argv[i],"-h")==0) displaymode= 0;
+        else if(   argv[i][0] >= 0x30 &&  argv[i][0] <= 0x39) pos = atoi(argv[i]);
+        else if(strcmp(argv[i],">")==0) {
+            if((i+1)<argc) strcpy(filename,argv[i+1]);
         }
     }
-    else if(argc <4){
-        if(strcmp(argv[1],"-d")==0) displaymode= 1;
-        else if(strcmp(argv[1],"-h")==0) displaymode= 0;
 
-        pos = atoi(argv[2]);
-        if(pos <0 || pos > 19)
-        {
-            sprintf((char *)buffer,"Parmeter error..\r\n");
-            SCIwrite((char *)buffer,strlen((char *)buffer));
-            return 0;
-        }
-        //메모리를 복사해 온다.
+    HWREG(IPC_BASE + IPC_O_SET) =  (1UL << (pos+1)); //IPC_SET_IPC21;  // 요청을 한다.
+    while((HWREG(IPC_BASE + IPC_O_FLG) & (1UL << (pos+1)) ) == (1UL << (pos+1))) { };  // 요청된 처리가 완료 되기를 기다린다.
 
-        HWREG(IPC_BASE + IPC_O_SET) =  (1UL << (pos+1)); //IPC_SET_IPC21;  // 요청을 한다.
-        while((HWREG(IPC_BASE + IPC_O_FLG) & (1UL << (pos+1)) ) == (1UL << (pos+1))) { };  // 요청된 처리가 완료 되기를 기다린다.
-
-        int i;
-        for(i=0;i < 1024;i++){
-            HWREGH(RFFTin1Buff_test+i) = HWREGH(RFFTin1Buff +i);
-        }
-        memory_dump((unsigned long)&RFFTin1Buff_test,displaymode);
-        //memory_dump((unsigned long)&RFFTin1Buff_test,1);
-        /*
-        switch(pos){
-            case 0: address=(unsigned long)&adcAResults_1;break;
-            case 1: address=(unsigned long)&adcAResults_2;break;
-            case 2: address=(unsigned long)&adcAResults_3;break;
-            case 3: address=(unsigned long)&adcAResults_4;break;
-            case 4: address=(unsigned long)&adcAResults_5;break;
-            case 5: address=(unsigned long)&adcAResults_6;break;
-            case 6: address=(unsigned long)&adcAResults_7;break;
-            case 7: address=(unsigned long)&adcAResults_8;break;
-            case 8: address=(unsigned long)&adcAResults_9;break;
-            case 9: address=(unsigned long)&adcAResults_10;break;
-            case 10: address=(unsigned long)&adcAResults_11;break;
-            case 11: address=(unsigned long)&adcAResults_12;break;
-            case 12: address=(unsigned long)&adcAResults_13;break;
-            case 13: address=(unsigned long)&adcAResults_14;break;
-            case 14: address=(unsigned long)&adcAResults_15;break;
-            case 15: address=(unsigned long)&adcAResults_16;break;
-            case 16: address=(unsigned long)&adcAResults_17;break;
-            case 17: address=(unsigned long)&adcAResults_18;break;
-            case 18: address=(unsigned long)&adcAResults_19;break;
-            case 19: address=(unsigned long)&adcAResults_20;break;
-            default:address=(unsigned long)&adcAResults_1;break;
-        }
-        */
+    for(i=0;i < 1024;i++){
+        HWREGH(RFFTin1Buff_test+i) = HWREGH(RFFTin1Buff +i);
     }
-    //메모리를 LOCK 한다.
-    //메모리를 읽어도 되는 상황인지 즉 락이 걸려 있는지를 확인 한 후  락이 걸려 있지 않으면 메모리를 점유하여 읽는 동안 데이타에 쓰지 못하게 막는다.
-    //while(!((HWREG(IPC_BASE + IPC_O_STS) & (IPC_STS_IPC0 << pos  )) == 0 )){ }
-    //HWREG(IPC_BASE + IPC_O_SET) = (IPC_SET_IPC0 << pos) ; // 데이타를 작업하겠다고 CPU1 알려 준다.
-    //memory_dump(address,displaymode);
-    //HWREG(IPC_BASE + IPC_O_CLR) =  (IPC_SET_IPC0 << pos); //클리어 시켜준다.
-    /*
-   uint16_t i,j;
+    memory_dump((unsigned long)&RFFTin1Buff_test,displaymode,filename);
 
-   BYTE buffer[10];
-   uint16_t len;
-   memset(buffer,0x00,sizeof(buffer));
-   unsigned long  startAddress;
-   startAddress =(unsigned long)&RFFTin1Buff;
-   for(j=0;j<256;j++)
-   {
-       sprintf((char *)&buffer,"0x%08p ",(RFFTin1Buff+j*16));
-       len =strlen((char *)buffer);
-       SCIwrite((char *)buffer,len);
-
-       for(i=0; i<16 ; i++)
-       {
-           sprintf((char *)&buffer,"%04x ",HWREGH(startAddress+16*j+i));
-           len =strlen((char *)buffer);
-           SCIwrite((char *)buffer,len);
-           //SCIprintf("%x:",*(RFFTin1Buff+i));
-       }
-       SCIprintf("\r\n");
-   }
-     */
-     return 0;
+   return 0;
 }
+
+#define SCIPrintFtoa(x,y)  { char   buffer[30]; ftoa(x, (char *)buffer, y); ; SCIwrite((char *)buffer,strlen((char *)buffer));};
+#define SCIPrintltoa(x,y)  { char   buffer[30];  ltoa(x, (char *)buffer, y); ; SCIwrite((char *)buffer,strlen((char *)buffer));};
+#define SCIPrint(x,...) do{ char tmpbuf[40];sprintf(tmpbuf,(char *)x,##__VA_ARGS__);SCIwrite(tmpbuf,strlen(tmpbuf));}while(0)
+
+int Cmd_offset(int argc, char *argv[])
+{
+    uint16_t setmode=0;
+    int16_t pos=0;
+    int16_t i;
+
+    // 1. 옵셋을 저정하기 위해서는 해당되는 입력을 GND 연결 한 후
+    // 2. offset -s 0 과 같이 번호를 입력하면
+    // 3. 해당되는 메모리를 CPU1에 요청을 한 후 복사해도 좋다는 사인을 받는다.
+    // 4. 이제 읽은 값을 평균을 구해서 정수화 시킨후
+    // 5. 0x0800이 되도록 값을 저장한다.
+    // 6. 완료 후 CPU1에게 값이 바뀌었음을 알려 준다.
+    // 7. CPU1은 바뀐 값을 자신의 FlashMemory에 적은 후 다음번 부팅할때에 이값을 사용한다. 혹은 즉시 사용한다.
+    // * 이 루틴은 전용프로그램으로 할 때도 같은 방식을 사용한다.
+
+    for(i=0;i<24;i++) offsetValue[i] = 0x00;
+    //메모리에 있는 옵셋값을 읽는다.
+    for(i=0;i<20;i++) offsetValue[i] = HWREGH(userFlashStart+i);
+
+    for(i = 1; i<argc;i++){
+        if(strcmp(argv[i],"-s")==0)      setmode= 1;
+        else if(   argv[i][0] >= 0x30 &&  argv[i][0] <= 0x39) pos = atoi(argv[i]);
+    }
+    // 3. 해당되는 메모리를 CPU1에 요청을 한 후 복사해도 좋다는 사인을 받는다.
+    HWREG(IPC_BASE + IPC_O_SET) =  (1UL << (pos+1)); //IPC_SET_IPC21;  // 요청을 한다.
+    while((HWREG(IPC_BASE + IPC_O_FLG) & (1UL << (pos+1)) ) == (1UL << (pos+1))) { };  // 요청된 처리가 완료 되기를 기다린다.
+    for(i=0;i < 1024;i++){
+        HWREGH(RFFTin1Buff_test+i) = HWREGH(RFFTin1Buff +i);
+    }
+    uint32_t AvgT=0 ;
+    //현재  0 옶셋 값의 평균을 구한다.
+    for(i=0;i < 1024;i++) AvgT = AvgT + HWREGH(RFFTin1Buff_test+i);
+    AvgT =  AvgT/1024;  // 값은 정수화 되어 나타나면 0보다 큰값이다.
+                        // 1.5V 떨어져 있는 값이다
+
+    //해당되는 곳의 값만 바꾼다.
+    offsetValue[pos] = (uint16_t)( AvgT)  - 0x0800 ; // 이제 기준값과 차이를 메모리에 기록하며 signed value이지만 Unsigned로 기록하고 나중에 Signed로 읽는다..
+
+    if(setmode ==1 && pos >= 0 && pos < 20)
+    {
+        CallFlashAPI(offsetValue,24);  //변경된 옵셋값을 변경하여 메모리에 써 넣는다.
+                                       //이 값은 시스템이 재 부팅시에 반영되게 한다.
+        SCIPrint("ADC %d =\r\n",pos);
+        SCIPrint("ADCA OFFTRIM IS  %x =\r\n",HWREGH(ADCA_BASE + ADC_O_OFFTRIM ));
+        ;
+    }
+    else
+    {
+        SCIPrint(("Adc Before Offet Value\n\r"));
+        //for(i=0;i<20;i++){SCIPrint("Adc");SCIPrintltoa(i,16);SCIPrint("\t");}
+        for(i=0;i<20;i++){SCIPrint("Adc %d\t",i);}
+        SCIPrint("\n\r");
+        //for(i=0;i<20;i++){SCIPrintltoa(offsetValue[i],16);SCIPrint("\t");}
+        for(i=0;i<20;i++){SCIPrint("%04X\t",offsetValue[i]);}
+        SCIPrint("\n\r");
+        SCIPrint("\n\r");
+        SCIPrint("Adc After Offet Value\n\r");
+        //for(i=0;i<20;i++){SCIPrintltoa(HWREGH(userFlashStart+i),16);SCIPrint("\t");};
+        for(i=0;i<20;i++){SCIPrint("%04X\t",HWREGH(userFlashStart+i));}
+        SCIPrint("\n\r");
+    }
+    // IPC_SET_IPC23 를 사용한다.
+    // OFFSET 값이 변경되었음을 CPU1에게 알려준다.
+    // ACK를 받을 필요는 없다.
+
+    HWREG(IPC_BASE + IPC_O_SET) = IPC_SET_IPC23;  // 요청을 한다.
+    while((HWREG(IPC_BASE + IPC_O_FLG) & IPC_STS_IPC23) == IPC_SET_IPC23) { };  // 요청된 처리가 완료 되기를 기다린다.
+    HWREG(IPC_BASE + IPC_O_CLR) = IPC_CLR_IPC23;  // Clear한다.
+
+   return 0;
+}
+
+
+
 
 int Cmd_test(int argc, char *argv[])
 {
-    FIL fdst;
+    //FIL fdst;
     FRESULT fr;
     WORD br, bw;
     BYTE buffer[10];
@@ -738,12 +781,12 @@ int Cmd_test(int argc, char *argv[])
     if( f_mount(0,&FatFs)  == FR_OK) g_eState = STATE_DEVICE_READY;
     else g_eState = STATE_NO_DEVICE;
 
-     fr= f_open(&fdst, "test.txt", FA_CREATE_ALWAYS | FA_WRITE);
+     fr= f_open(&g_sFileObject, "test.txt", FA_CREATE_ALWAYS | FA_WRITE);
      if(fr == FR_OK)
      {
          br=10;
-         f_write(&fdst, buffer, br, &bw);
-         f_close(&fdst);
+         f_write(&g_sFileObject, buffer, br, &bw);
+         f_close(&g_sFileObject);
          SCIprintf("File Write OK  %d",bw);
          return 0;
      }
@@ -1146,7 +1189,9 @@ int Cmd_get(int argc, char *argv[])
         if(usBytesRead==0)break;
         next =0;
         chunk->payload[usBytesRead] = 0; //g_cTmpBuf[usBytesRead] = 0;
-        memset(chunk->payload + usBytesRead, 0xff, sizeof(chunk->payload) - usBytesRead); //memcpy(chunk->payload, g_cTmpBuf, usBytesRead);
+        memset(chunk->payload + usBytesRead, 0xFF, sizeof(chunk->payload) - usBytesRead); //memcpy(chunk->payload, g_cTmpBuf, usBytesRead);
+        //chunk->crcH = (crc16(chunk->payload, sizeof(chunk->payload)) >> 8) & 0xFF; //chunk->crc = swap16(crc16(chunk->payload, sizeof(chunk->payload)));
+        //chunk->crcL = (crc16(chunk->payload, sizeof(chunk->payload)) ) & 0xFF;
         chunk->crcH = (crc16(chunk->payload, sizeof(chunk->payload)) >> 8) & 0xFF; //chunk->crc = swap16(crc16(chunk->payload, sizeof(chunk->payload)));
         chunk->crcL = (crc16(chunk->payload, sizeof(chunk->payload)) ) & 0xFF;
         ui8Char=sizeof(xmodem_chunk);
@@ -1195,8 +1240,8 @@ int Cmd_get(int argc, char *argv[])
             chunk->block++;
         }
         if(retryCount>10)break;
-    }
-    while(usBytesRead == sizeof(chunk->payload) );
+    } while(usBytesRead == sizeof(chunk->payload) );
+
     SCI_writeCharBlockingNonFIFO(SCIC_BASE, X_EOF);
 
     ui8Char=0;
@@ -1210,10 +1255,11 @@ int Cmd_get(int argc, char *argv[])
     //SCI_writeCharBlockingNonFIFO(SCIC_BASE, X_ETB );
     SCI_writeCharBlockingNonFIFO(SCIC_BASE, X_EOF);
     if(retryCount>10) SCIprintf("\nError Occured...\n");
-    else SCIprintf("\nFile Receive DONE\n");
+    else SCIprintf("\nFile Send DONE\n");
 
 error:
     free(chunk);
+    f_close(&g_sFileObject);
     return(0);
 }
 

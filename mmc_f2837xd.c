@@ -201,7 +201,7 @@ BYTE wait_ready (void)
     rcvr_spi();
     do{
         res = rcvr_spi();
-        DELAY_US(175);
+        DEVICE_DELAY_US(175);
     } while ((res != 0xFF) && Timer2);
 
     return res;
@@ -291,7 +291,7 @@ void power_on (void)    //EDITED
     /* to be able to accept a native command. */
     //send_initial_clock_train();
 
-    DELAY_US(50);
+    DEVICE_DELAY_US(50);
 
     PowerFlag = 1;
 }

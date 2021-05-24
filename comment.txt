@@ -1,3 +1,66 @@
+Include Option
+${COM_TI_C2000WARE_SOFTWARE_PACKAGE_INCLUDE_PATH}
+${PROJECT_ROOT}
+${PROJECT_ROOT}/device
+${C2000WARE_DLIB_ROOT}
+${CG_TOOL_ROOT}/include
+${INSTALLROOT_TO_FPU}/fpu32
+C:\ti\C2000Ware_3_04_00_00_Software\device_support\f2837xd\headers\include
+
+predefined symbos 
+${COM_TI_C2000WARE_SOFTWARE_PACKAGE_SYMBOLS}
+DEBUG
+CPU1
+
+
+C2000 Linker 
+Include library file
+${COM_TI_C2000WARE_SOFTWARE_PACKAGE_LIBRARIES}
+libc.a
+c28x_fpu_dsp_library.lib
+
+
+File Search path
+${COM_TI_C2000WARE_SOFTWARE_PACKAGE_LIBRARY_PATH}
+${CG_TOOL_ROOT}/lib
+${CG_TOOL_ROOT}/include
+c:\ti\ccs1020\ccs\tools\compiler\ti-cgt-c2000_20.2.2.LTS\lib
+C:\ti\C2000Ware_3_04_00_00_Software\libraries\dsp\FPU\c28\lib
+
+
+CPU2 Project Enviroment
+build -> C2000 compiler -> Include options 
+   ${COM_TI_C2000WARE_SOFTWARE_PACKAGE_INCLUDE_PATH}
+   C:\ti\C2000Ware_3_04_00_00_Software\device_support\f2837xd\headers\include
+   C:\ti\C2000Ware_3_04_00_00_Software\libraries\flash_api\f2837xd\include
+   C:\ti\C2000Ware_3_04_00_00_Software\device_support\f2837xd\common\include
+   ${PROJECT_ROOT}
+   ${PROJECT_ROOT}/device
+   ${C2000WARE_DLIB_ROOT}
+   ${CG_TOOL_ROOT}/include
+
+build -> C2000 Linder -> File Search Path
+   Include Library 
+   ${COM_TI_C2000WARE_SOFTWARE_PACKAGE_LIBRARIES}   
+   C:\ti\C2000Ware_3_04_00_00_Software\libraries\flash_api\f2837xd\lib\F021_API_F2837xD_FPU32_EABI.lib
+   libc.a
+   Add dir
+   ${COM_TI_C2000WARE_SOFTWARE_PACKAGE_LIBRARY_PATH}
+   ${CG_TOOL_ROOT}/lib
+   ${CG_TOOL_ROOT}/include
+ 
+Linked Resources
+ C2000WARE_DLIB_ROOT  ${COM_TI_C2000WARE_SOFTWARE_PACKAGE_INSTALL_DIR}\driverlib\f2837xd\driverlib
+
+ Build -> SysConfig -> Basin Options 
+   Name of devide F2837xD 
+ Path   ${C2000WARE_ROOT}/.metadata/sdk.json
+
+heap size 0x200
+stack 0x3f8
+
+
+
 
     //DMA_startChannel(DMA_CH6_BASE);
     //Test for fft...if request_fft is assigned then copy data to fft memory also.
@@ -104,3 +167,99 @@
                 case 19: HWREG(IPC_BASE + IPC_O_SET)=IPC_SET_IPC19; break;
                 }
                 */
+        //memory_dump((unsigned long)&RFFTin1Buff_test,1);
+        /*
+        switch(pos){
+            case 0: address=(unsigned long)&adcAResults_1;break;
+            case 1: address=(unsigned long)&adcAResults_2;break;
+            case 2: address=(unsigned long)&adcAResults_3;break;
+            case 3: address=(unsigned long)&adcAResults_4;break;
+            case 4: address=(unsigned long)&adcAResults_5;break;
+            case 5: address=(unsigned long)&adcAResults_6;break;
+            case 6: address=(unsigned long)&adcAResults_7;break;
+            case 7: address=(unsigned long)&adcAResults_8;break;
+            case 8: address=(unsigned long)&adcAResults_9;break;
+            case 9: address=(unsigned long)&adcAResults_10;break;
+            case 10: address=(unsigned long)&adcAResults_11;break;
+            case 11: address=(unsigned long)&adcAResults_12;break;
+            case 12: address=(unsigned long)&adcAResults_13;break;
+            case 13: address=(unsigned long)&adcAResults_14;break;
+            case 14: address=(unsigned long)&adcAResults_15;break;
+            case 15: address=(unsigned long)&adcAResults_16;break;
+            case 16: address=(unsigned long)&adcAResults_17;break;
+            case 17: address=(unsigned long)&adcAResults_18;break;
+            case 18: address=(unsigned long)&adcAResults_19;break;
+            case 19: address=(unsigned long)&adcAResults_20;break;
+            default:address=(unsigned long)&adcAResults_1;break;
+        }
+        */
+    }
+    //메모리를 LOCK 한다.
+    //메모리를 읽어도 되는 상황인지 즉 락이 걸려 있는지를 확인 한 후  락이 걸려 있지 않으면 메모리를 점유하여 읽는 동안 데이타에 쓰지 못하게 막는다.
+    //while(!((HWREG(IPC_BASE + IPC_O_STS) & (IPC_STS_IPC0 << pos  )) == 0 )){ }
+    //HWREG(IPC_BASE + IPC_O_SET) = (IPC_SET_IPC0 << pos) ; // 데이타를 작업하겠다고 CPU1 알려 준다.
+    //memory_dump(address,displaymode);
+    //HWREG(IPC_BASE + IPC_O_CLR) =  (IPC_SET_IPC0 << pos); //클리어 시켜준다.
+    /*
+   uint16_t i,j;
+
+   BYTE buffer[10];
+   uint16_t len;
+   memset(buffer,0x00,sizeof(buffer));
+   unsigned long  startAddress;
+   startAddress =(unsigned long)&RFFTin1Buff;
+   for(j=0;j<256;j++)
+   {
+       sprintf((char *)&buffer,"0x%08p ",(RFFTin1Buff+j*16));
+       len =strlen((char *)buffer);
+       SCIwrite((char *)buffer,len);
+
+       for(i=0; i<16 ; i++)
+       {
+           sprintf((char *)&buffer,"%04x ",HWREGH(startAddress+16*j+i));
+           len =strlen((char *)buffer);
+           SCIwrite((char *)buffer,len);
+           //SCIprintf("%x:",*(RFFTin1Buff+i));
+       }
+       SCIprintf("\r\n");
+   }
+     */
+    pos =0;
+    if(argc <2 ){
+         displaymode=0;
+    }
+    else if(argc <3){
+        // display mode mode
+        if(strcmp(argv[1],"-d")==0) displaymode= 1;
+        else if(strcmp(argv[1],"-h")==0) displaymode= 0;
+        else{
+            sprintf((char *)buffer,(char *)"Parmeter error..\r\n");
+            SCIwrite((char *)buffer,strlen((char *)buffer));
+            sprintf((char *)buffer,(char *)"Usage: dump [-h] [-d] memory \r\n");
+            SCIwrite((char *)buffer,strlen((char *)buffer));
+            sprintf((char *)buffer,(char *)"memory : 0 to 20 \r\n");
+            SCIwrite((char *)buffer,strlen((char *)buffer));
+            return 0;
+        }
+    }
+    else if(argc <4){
+        if(strcmp(argv[1],"-d")==0) displaymode= 1;
+        else if(strcmp(argv[1],"-h")==0) displaymode= 0;
+
+        pos = atoi(argv[2]);
+        if(pos <0 || pos > 19)
+        {
+            sprintf((char *)buffer,"Parmeter error..\r\n");
+            SCIwrite((char *)buffer,strlen((char *)buffer));
+            return 0;
+        }
+        //메모리를 복사해 온다.
+
+        HWREG(IPC_BASE + IPC_O_SET) =  (1UL << (pos+1)); //IPC_SET_IPC21;  // 요청을 한다.
+        while((HWREG(IPC_BASE + IPC_O_FLG) & (1UL << (pos+1)) ) == (1UL << (pos+1))) { };  // 요청된 처리가 완료 되기를 기다린다.
+
+        int i;
+        for(i=0;i < 1024;i++){
+            HWREGH(RFFTin1Buff_test+i) = HWREGH(RFFTin1Buff +i);
+        }
+        memory_dump((unsigned long)&RFFTin1Buff_test,displaymode);

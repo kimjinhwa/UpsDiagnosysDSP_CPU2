@@ -55,7 +55,7 @@ PAGE 1 :
 SECTIONS
 {
    codestart        : > BEGIN,     PAGE = 0
-   .text            : >>   RAMLS_01234 | RAMGS2	| RAMGS5       ,   PAGE = 0
+   .text            : >>   RAMLS_01234 | RAMGS2	| RAMGS5 | RAMGS7        ,   PAGE = 0
    //.text            : >> RAMD0 |  RAMLS_01234 | 	RAMGS5       ,   PAGE = 0
    //.text            : >> RAMD0 |  RAMGS2to6_combined ,   PAGE = 0
    .cinit           : > RAMM0,     PAGE = 0
