@@ -188,15 +188,22 @@ tCmdLineEntry g_psCmdTable[] =
 
 void main(void)
 {
+
+    //IpcRegs.IPCBOOTSTS=C2_BOOTROM_BOOTSTS_SYSTEM_READY;
+    //while(1){
+       //if( IpcRegs.IPCBOOTMODE == C1C2_BROM_BOOTMODE_BOOT_FROM_FLASH ) break;
+    //}
     Device_init();
+
+
     //CPU1이 부팅되기를 기다린다
-    uint16_t delayCount=0;
-    while((HWREG(IPC_BASE + IPC_O_STS) & IPC_STS_IPC0) == 0U)
-    {
-        DEVICE_DELAY_US(1000000);// 125*1024 128us at 8Khz    128us
-        if(delayCount++ > 4) break;
-        //break;
-    }
+   // uint16_t delayCount=0;
+    //while((HWREG(IPC_BASE + IPC_O_STS) & IPC_STS_IPC0) == 0U)
+    //{
+    //    DEVICE_DELAY_US(1000000);// 125*1024 128us at 8Khz    128us
+    //    if(delayCount++ > 2) break;
+    //    //break;
+   // }
     HWREG(IPC_BASE + IPC_O_ACK)  = IPC_ACK_IPC0 ;
     Device_initGPIO();
 	MemCfg_setGSRAMMasterSel(MEMCFG_SECT_GS2,MEMCFG_GSRAMMASTER_CPU2);
@@ -692,7 +699,7 @@ int Cmd_dump(int argc, char *argv[])
 
 #define SCIPrintFtoa(x,y)  { char   buffer[30]; ftoa(x, (char *)buffer, y); ; SCIwrite((char *)buffer,strlen((char *)buffer));};
 #define SCIPrintltoa(x,y)  { char   buffer[30];  ltoa(x, (char *)buffer, y); ; SCIwrite((char *)buffer,strlen((char *)buffer));};
-#define SCIPrint(x,...) do{ char tmpbuf[40];sprintf(tmpbuf,(char *)x,##__VA_ARGS__);SCIwrite(tmpbuf,strlen(tmpbuf));}while(0)
+#define SCIPrint(x,...)  do{ char tmpbuf[40];sprintf(tmpbuf,(char *)x,##__VA_ARGS__);SCIwrite(tmpbuf,strlen(tmpbuf));}while(0)
 
 int Cmd_offset(int argc, char *argv[])
 {
@@ -736,8 +743,10 @@ int Cmd_offset(int argc, char *argv[])
     {
         CallFlashAPI(offsetValue,24);  //변경된 옵셋값을 변경하여 메모리에 써 넣는다.
                                        //이 값은 시스템이 재 부팅시에 반영되게 한다.
-        SCIPrint("ADC %d =\r\n",pos);
-        SCIPrint("ADCA OFFTRIM IS  %x =\r\n",HWREGH(ADCA_BASE + ADC_O_OFFTRIM ));
+        SCIPrint("ADC NO is  %d \r\n",pos);
+        //SCIPrint("ADCA OFFTRIM IS  %d =\r\n",HWREGH(ADCA_BASE + ADC_O_OFFTRIM ));
+        //SCIPrint("ADCA OFFTRIM IS  %d \r\n",offsetValue[pos]);
+        SCIPrint("ADCA OFFTRIM VALUE IS %d \r\n",HWREGH(userFlashStart + pos ));
         ;
     }
     else
