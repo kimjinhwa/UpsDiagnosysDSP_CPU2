@@ -28,7 +28,9 @@ void Error(Fapi_StatusType status)
     __asm("    ESTOP0");
 }
 
-void CallFlashAPI(uint16_t *Buffer,uint16_t len){
+//#define userFlashStart         0xBE000
+void CallFlashAPI(uint32_t flashAddress, uint16_t *Buffer,uint16_t len)
+{
     //DCSMCOMMON_BASE
 
     uint16_t repeatCount=0;
@@ -63,7 +65,7 @@ void CallFlashAPI(uint16_t *Buffer,uint16_t len){
          Error(oReturnCheck);
      }
      oReturnCheck = Fapi_issueAsyncCommandWithAddress(Fapi_EraseSector,
-                    (uint32 *)userFlashStart);
+                    (uint32 *)flashAddress);
      if(oReturnCheck != Fapi_Status_Success)
      {
          // Check Flash API documentation for possible errors.
@@ -77,7 +79,7 @@ void CallFlashAPI(uint16_t *Buffer,uint16_t len){
      // Verify that Sector C is erased. The erase step itself does verification
      // as it goes. This verify is a second verification that can be done.
      //
-     oReturnCheck = Fapi_doBlankCheck((uint32 *)userFlashStart,
+     oReturnCheck = Fapi_doBlankCheck((uint32 *)flashAddress,
                     userFlashLenght,
                     &oFlashStatusWord);
 
@@ -104,7 +106,7 @@ void CallFlashAPI(uint16_t *Buffer,uint16_t len){
      {
          //i=0;
          oReturnCheck = Fapi_issueProgrammingCommand(
-                        (uint32 *)(userFlashStart + repeatCount*8) ,
+                        (uint32 *)(flashAddress + repeatCount*8) ,
                         (uint16 *)(Buffer + repeatCount *8),
                         8,
                         0,
@@ -131,13 +133,13 @@ void CallFlashAPI(uint16_t *Buffer,uint16_t len){
          Buffer32 = (uint32 *)(Buffer+ repeatCount*8);
 
          oReturnCheck = Fapi_doVerify(
-                         (uint32 *)(userFlashStart+ repeatCount*8),
+                         (uint32 *)(flashAddress+ repeatCount*8),
                          4,
                          Buffer32,
                          &oFlashStatusWord);
          int i;
          for(i=0;i<8;i++){
-             if( ((uint16 *)(userFlashStart+i+ repeatCount*8)) != ((uint16 *)(Buffer+ i+repeatCount*8)) )
+             if( ((uint16 *)(flashAddress+i+ repeatCount*8)) != ((uint16 *)(Buffer+ i+repeatCount*8)) )
              {
                  oReturnCheck = Fapi_Error_Fail;
                  break;
@@ -161,8 +163,8 @@ void CallFlashAPI(uint16_t *Buffer,uint16_t len){
       Flash_setPumpPowerMode(FLASH0ECC_BASE,FLASH_PUMP_PWR_SLEEP);
       //(*((volatile uint16_t *)((uintptr_t)(x))))
       int16_t value;
-      value = HWREGH(userFlashStart);
+      value = HWREGH(flashAddress);
       if(value == 0);
-      value = HWREGH(userFlashStart+1);
+      value = HWREGH(flashAddress+1);
       if(value == 1);
 }

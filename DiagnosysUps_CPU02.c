@@ -144,6 +144,7 @@ int Cmd_dump(int argc, char *argv[]);
 int Cmd_bdata(int argc, char *argv[]);
 int Cmd_fft(int argc, char *argv[]);
 int Cmd_offset(int argc, char *argv[]);
+int Cmd_freq(int argc, char *argv[]);
 int Cmd_time(int argc, char *argv[]);
 int memory_dump(unsigned long   startAddress,uint16_t mode,char* filename);
 void get_time();
@@ -181,6 +182,7 @@ tCmdLineEntry g_psCmdTable[] =
     { "dump",    Cmd_dump,      "  : Show Memory RFFTin1Buff  :ex) dump -h 0 > dump01.txt " },
     { "fft",    Cmd_fft,      "  : Get FFT Data " },
     { "offset",    Cmd_offset,      "  : Offset Adc for 0 to 19 " },
+    { "freq",    Cmd_freq,      "  : Change Read Frequency for ADC [hz] " },
     { "bdata",    Cmd_bdata,      "  : Get Hex Data -> For Dedicated software " },
     { "time",    Cmd_time,      "  : Show Now System Time" },
     { 0, 0, 0 }
@@ -204,7 +206,7 @@ void main(void)
     //    if(delayCount++ > 2) break;
     //    //break;
    // }
-    HWREG(IPC_BASE + IPC_O_ACK)  = IPC_ACK_IPC0 ;
+    //HWREG(IPC_BASE + IPC_O_ACK)  = IPC_ACK_IPC0 ;
     Device_initGPIO();
 	MemCfg_setGSRAMMasterSel(MEMCFG_SECT_GS2,MEMCFG_GSRAMMASTER_CPU2);
 	MemCfg_setGSRAMMasterSel(MEMCFG_SECT_GS3,MEMCFG_GSRAMMASTER_CPU2);
@@ -656,7 +658,7 @@ int Cmd_bdata(int argc, char *argv[])
 
     HWREG(IPC_BASE + IPC_O_SET) =  (1UL << (pos+1)); //IPC_SET_IPC21;  // 요청을 한다.
     while((HWREG(IPC_BASE + IPC_O_FLG) & (1UL << (pos+1)) ) == (1UL << (pos+1))) { };  // 요청된 처리가 완료 되기를 기다린다.
-    HWREG(IPC_BASE + IPC_O_ACK) = IPC_ACK_IPC0;
+    //HWREG(IPC_BASE + IPC_O_ACK) = IPC_ACK_IPC0;
     for(i=0;i < 1024;i++){
         HWREGH(RFFTin1Buff_test+i) = HWREGH(RFFTin1Buff +i);
     }
@@ -701,6 +703,45 @@ int Cmd_dump(int argc, char *argv[])
 #define SCIPrintltoa(x,y)  { char   buffer[30];  ltoa(x, (char *)buffer, y); ; SCIwrite((char *)buffer,strlen((char *)buffer));};
 #define SCIPrint(x,...)  do{ char tmpbuf[40];sprintf(tmpbuf,(char *)x,##__VA_ARGS__);SCIwrite(tmpbuf,strlen(tmpbuf));}while(0)
 
+int Cmd_freq(int argc, char *argv[])
+{
+    uint32_t freq=0;
+    uint16_t i;
+    uint16_t setmode;
+    for(i = 1; i<argc;i++){
+        if(strcmp(argv[i],"-s")==0)      setmode= 1;
+        else if(   argv[i][0] >= 0x30 &&  argv[i][0] <= 0x39) freq = atol(argv[i]);
+    }
+    if(setmode){
+        HWREG(IPC_BASE +  IPC_O_SENDCOM)  = 1UL ;
+        HWREG(IPC_BASE +  IPC_O_SENDDATA)  = freq;
+        HWREG(IPC_BASE + IPC_O_SET) =  IPC_SET_IPC30 ;//
+        while(HWREG(IPC_BASE + IPC_O_FLG) &  IPC_FLG_IPC30 ){};
+        SCIPrint("Req to Change Frequency :  %ld \r\n",freq );
+        freq = HWREG(IPC_BASE +  IPC_O_REMOTEREPLY);
+        SCIPrint("After Change Frequency :  %ld \r\n",freq );
+    }
+    else
+    {
+        SCIPrint("Reading Frequency \r\n",freq );
+        HWREG(IPC_BASE +  IPC_O_SENDCOM)  = 1UL ;
+        HWREG(IPC_BASE +  IPC_O_SENDDATA)  = 0;
+        HWREG(IPC_BASE + IPC_O_SET) =  IPC_SET_IPC30 ;//
+
+        //while(HWREG(IPC_BASE + IPC_O_FLG) &  IPC_FLG_IPC30 ){};
+        while((HWREG(IPC_BASE + IPC_O_FLG) & IPC_FLG_IPC30) == IPC_FLG_IPC30) { };  // 요청된 처리가 완료 되기를 기다린다.
+        //while((HWREG(IPC_BASE + IPC_O_FLG) & IPC_STS_IPC21) == IPC_SET_IPC21) { };  // 요청된 처리가 완료 되기를 기다린다.
+
+        //while((HWREG(IPC_BASE + IPC_O_FLG) & IPC_STS_IPC21) == IPC_SET_IPC21) { };  // 요청된 처리가 완료 되기를 기다린다.
+
+        freq = HWREG(IPC_BASE +  IPC_O_REMOTEREPLY);
+        SCIPrint("Now Frequency :  %ld \r\n",freq );
+
+        SCIPrint("Usage: freq -s 80000\r\n");
+    }
+
+   return 0;
+}
 int Cmd_offset(int argc, char *argv[])
 {
     uint16_t setmode=0;
@@ -718,7 +759,7 @@ int Cmd_offset(int argc, char *argv[])
 
     for(i=0;i<24;i++) offsetValue[i] = 0x00;
     //메모리에 있는 옵셋값을 읽는다.
-    for(i=0;i<20;i++) offsetValue[i] = HWREGH(userFlashStart+i);
+    for(i=0;i<20;i++) offsetValue[i] = HWREGH(0xBE000+i);
 
     for(i = 1; i<argc;i++){
         if(strcmp(argv[i],"-s")==0)      setmode= 1;
@@ -741,12 +782,14 @@ int Cmd_offset(int argc, char *argv[])
 
     if(setmode ==1 && pos >= 0 && pos < 20)
     {
-        CallFlashAPI(offsetValue,24);  //변경된 옵셋값을 변경하여 메모리에 써 넣는다.
+
+        //#define userFlashStart         0xBE000
+        CallFlashAPI(0xBE000,offsetValue,24);  //변경된 옵셋값을 변경하여 메모리에 써 넣는다.
                                        //이 값은 시스템이 재 부팅시에 반영되게 한다.
         SCIPrint("ADC NO is  %d \r\n",pos);
         //SCIPrint("ADCA OFFTRIM IS  %d =\r\n",HWREGH(ADCA_BASE + ADC_O_OFFTRIM ));
         //SCIPrint("ADCA OFFTRIM IS  %d \r\n",offsetValue[pos]);
-        SCIPrint("ADCA OFFTRIM VALUE IS %d \r\n",HWREGH(userFlashStart + pos ));
+        SCIPrint("ADCA OFFTRIM VALUE IS %d \r\n",HWREGH(0xBE000 + pos ));
         ;
     }
     else
@@ -760,8 +803,8 @@ int Cmd_offset(int argc, char *argv[])
         SCIPrint("\n\r");
         SCIPrint("\n\r");
         SCIPrint("Adc After Offet Value\n\r");
-        //for(i=0;i<20;i++){SCIPrintltoa(HWREGH(userFlashStart+i),16);SCIPrint("\t");};
-        for(i=0;i<20;i++){SCIPrint("%04X\t",HWREGH(userFlashStart+i));}
+
+        for(i=0;i<20;i++){SCIPrint("%04X\t",HWREGH(0xBE000+i));}
         SCIPrint("\n\r");
     }
     // IPC_SET_IPC23 를 사용한다.
